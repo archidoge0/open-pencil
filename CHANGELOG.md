@@ -4,139 +4,222 @@
 
 ### Breaking changes
 
-- Update custom Vue SDK binding providers to implement `getBindingId()` and handle `unresolved`. Replace `setValue()` with `prepareEdit()`, returning a stable edit key, captured value, setter, and restoration callback.
+- The desktop app now requires macOS 13 or later; the web app supports Chrome 111, Edge 111, Firefox 128, and Safari 16.4 or later.
+- `sceneNodeToJSX` and `selectionToJSX` in `@open-pencil/core` produce only OpenPencil JSX, and `JSXFormat` and `JSXExportOptions` are removed. For Tailwind JSX, use `sceneNodesToTailwindJSX(graph, nodeIds)` from `@open-pencil/dom-css` or the browser-safe `@open-pencil/dom-css/export`.
+- Color conversion and management and text/layout direction helpers moved from `@open-pencil/core/color` and `@open-pencil/core/text` to `@open-pencil/scene-graph/color` and `@open-pencil/scene-graph/text-direction`, and `@open-pencil/core/bytes` is removed in favor of `js-base64`; the `@open-pencil/core` root exports are unchanged. `@open-pencil/dom-css` no longer requires `@open-pencil/core`, and `exportHTMLBundle` takes a font resolver in `fonts` instead of `'assets'`; pass one built on `exportWebFontFaceAssets` from `@open-pencil/core/text/web-font/assets` to keep font files in standalone exports.
+- Design JSX moved from `@open-pencil/core` to the new `@open-pencil/design-jsx` package, which depends only on `@open-pencil/scene-graph`. Import elements, paint and effect helpers, variables, `JSX_REFERENCE`, `buildComponent`, `sceneNodeToJSX`, and `selectionToJSX` from `@open-pencil/design-jsx`; `@open-pencil/core/design-jsx` now exports only `renderJSX` and `renderTree`, which render with OpenPencil's icons and layout. The `@open-pencil/core` root keeps `renderJSX` and `renderTree` and drops the other design JSX exports, `renderTreeNode` is removed in favor of `renderTree`, and the `@open-pencil/core/io/formats/jsx` subpath is removed.
 
 ### Added
 
 - Preview designs progressively on the canvas as direct AI providers stream JSX, without saving partial designs or adding intermediate undo steps.
+- Write design trees as TSX with `@open-pencil/design-jsx` as the JSX import source, and render them with `renderTree`.
+- Swap the component behind an instance with `instance.swapComponent(component)` in the plugin API, as in Figma.
+- Detach an instance from its component with `detachInstance()` in the plugin API, as in Figma, from scripts run through `eval`.
+- Run scripts written for Figma's dynamic-page mode that call `figma.getNodeByIdAsync()` or `getMainComponentAsync()`; both resolve to the same nodes as their synchronous forms.
+- Export components to Storybook with `openpencil export -f storybook`: one CSF3 story file per component set or component for React, Vue, or HTML, with a story and `select` controls per variant, a design image per variant, and an `openpencil://` link that opens the variant in OpenPencil. `--watch` re-exports on every save and removes stories of deleted components (#727).
+- Export HTML and Tailwind JSX from the app's export options and through the IO registry, and export Tailwind JSX from the CLI with `-f tailwind-jsx` (`-f jsx --style tailwind` still works). HTML export of a single layer now includes the layer itself, as other formats do.
+- Choose PPTX in the Export panel's format list, alongside PNG, JPG, WEBP, SVG, and PDF.
+
+### Changed
+
+- `openpencil://` and web `?node=` links select the layer on another page when the current page has none, switching to that page.
+- Generate Tailwind JSX with the same class mapping as Tailwind HTML export, so both describe a design the same way, and write opaque colors as hex in HTML, CSS, and Tailwind output. `openpencil export -f jsx --style tailwind` now exports a whole page when no `--node` is given.
+- Show download progress with a percentage and transferred size while installing a desktop update, instead of an indeterminate message that lasted until the restart.
+
+### Fixed
+- Type `parameterConsumptionMap`, `propRefValue`, and `expressionValue` in the Kiwi `NodeChange` codec, which `fig.kiwi` declares but the TypeScript definitions omitted, so reading them no longer needs a cast.
+
+- Render fragments (`<>…</>`) nested inside other elements in JSX from the AI and MCP `render` tool, which previously failed with `Unknown element: <>`.
+- Judge text contrast in the AI and MCP `describe` tool by its WCAG 2 ratio (4.5:1, or 3:1 for large text), the same ratio the `color-contrast` lint rule computes. It no longer reports passing dark text on mid-tone backgrounds as "dark on dark", now reports low-contrast light text, measures translucent and faded text as it is drawn, skips text whose color is bound to a variable, and says the ratio and the threshold it missed (#735).
+- Warn about options the paint and effect helpers ignore when rendering JSX instead of dropping them silently, and point `blur` in effect helpers at `radius`, the name Figma uses (#736).
+- Size groups and boolean operations made through the AI and MCP `group_nodes` and `boolean_*` tools to what they contain, as the editor's commands already do, instead of a default 100 × 100 box or the first operand's box (#738).
+- Keep a layer where it is drawn when it moves into or out of a rotated or flipped parent, instead of shifting it and leaving it at its old angle (#737).
+- Size auto-width text from `.pen` files to its content in CLI exports, instead of a 10000px placeholder that stretched hugging frames in HTML and Storybook output, and keep narrow widths a `.pen` file sets explicitly instead of widening multi-character text.
+- Keep grid layouts, rotation, inner shadows, every shadow of a layer, layer and background blur, flex grow, right-to-left direction, and sections in HTML export, which previously turned grids into columns and dropped the rest.
+- Show what to update instead of a blank window when the browser or system WebView is too old, naming the detected macOS, Safari, Chrome, Edge, Firefox, WebKitGTK, or WebView2 version and linking a prefilled bug report, and explain a failed start the same way (#744).
+- Start on macOS 13 with WebKit older than Safari 17.4, which previously failed with `Promise.withResolvers is not a function` (#744).
+- Evaluate the `**` operator in the AI and MCP `calc` tool, which its own description advertised but which the tool rejected. `calc` now accepts exactly the arithmetic it documents — `+ - * / % **`, parentheses and `min max floor ceil round abs sqrt pow` — and no longer evaluates undocumented expressions such as `random()`, factorials, trigonometry, strings, arrays, or property access.
+- Show Chinese, Japanese, Korean, and Arabic characters in a fallback font when the text's own font is unavailable and another font substitutes for it, instead of drawing missing-glyph boxes (#746).
+- Explain in the font issues banner when an installed font, such as PingFang on macOS 15 and later, stores outlines in a format OpenPencil cannot draw yet, instead of spending over a second trying to load each of its styles (#746).
+- Render the Medium, Semibold, Bold, and other styles of variable fonts at their named weights instead of drawing Regular or a synthetic bold.
+- Load the Bold, Medium, and other styles of macOS system fonts packaged as font collections, such as Menlo, Helvetica Neue, and Avenir Next, instead of reporting them as substituted or drawing a different style (#746).
+- Load the Medium, Semibold, Bold, and other styles of installed variable fonts such as SF Pro on macOS instead of reporting them as substituted (#752).
+- Ship the MIT license text in every published npm package, and add READMEs for `@open-pencil/core`, `@open-pencil/cli`, and `@open-pencil/mcp` on npm.
+
+### Security
+
+- Evaluate `calc` expressions through `jsep` and an arithmetic allowlist that never compiles input into JavaScript, replacing the `expr-eval` dependency and its unpatched critical code-execution advisory (GHSA-q9v2-7m5w-4693).
+- Escape layer names and other text properties in JSX and Tailwind JSX export, so text from a document can no longer add attributes or JavaScript expressions that the AI and MCP `render` and `replace` tools would execute, and names containing `&` no longer change when the JSX is rendered back.
+
+## 0.15.1 — 2026-09-18
+
+### Added
+
+- Configure built-in AI and local MCP tool access independently on a Tool access page, including optional extended AI tools, searchable read-only and side-effect groups, and per-target defaults (#584).
+- Set the built-in AI's maximum steps per message in Chat settings, including a custom number, with consistent stopping and remaining-step warnings (#573).
+- Open documents and jump to a named layer from `openpencil://open?file=&node=` links, resolving the file against open tabs or a one-time file picker. Path segments match the way the filesystem does: case-insensitively on macOS and Windows, exactly on Linux.
+- Open documents and jump to a named layer in the web app from `?file=&node=` links, fetching the file from an `https:` URL without credentials, ignoring the URL fragment, and refusing a document larger than 64 MiB — a ceiling the automation bridge's `openFile` now shares.
+
+### Changed
+
+- Create new documents with the sRGB colour profile, so Display P3 is reserved for documents that declare it.
+- Export diagnostics from Settings only, with a retention count you choose. AI requests and tool activity now carry conversation and request identifiers, while chat no longer offers a separate diagnostic log or includes transcript content.
+- Replace the demo's legacy reference page with a component library on the first page, including component sets, linked instances, component properties, and the variable collections, and show the standard canvas loading overlay and tab indicator while it is generated instead of an empty canvas.
+
+### Fixed
+
+- Store colours edited in the colour picker in the document's colour profile, and convert them on the way to the display, so a Display-P3 document no longer looks different on an sRGB display than on a wide-gamut one.
+- Keep Display-P3 documents rendering correctly in wide gamut where the browser supports it and in sRGB elsewhere, fixing the black rectangles and incorrect blend colours, with a dismissible notice when wide gamut is unavailable.
+- Classify MCP `open_file` and `close_file` operations as read-only hints, and close opened document tabs through the new `close_file` tool with the usual unsaved-change prompt.
+- Let the desktop app use an MCP server you started yourself by allowing the app's own origin by default, instead of requiring `OPENPENCIL_MCP_CORS_ORIGIN`.
+- Explain why the local MCP server did not start — a missing `@open-pencil/mcp` install, a denied command, an early exit, or an unreachable address — with translated guidance, and find a globally installed server when the desktop app is launched from the system shell.
+- Animate the AI chat tool-call disclosure, which expanded and collapsed without motion because its animation classes were misspelled.
+- Mark unsaved documents and ask whether to save before closing a tab, the desktop window, or the application, rather than relying on recovery alone.
+- Defer AI provider connections and system credential reads until you send a message or use a connected feature, so opening documents and browsing chat history no longer trigger unexpected credential prompts.
+- Save and recover documents whose text uses disabled numeric, fraction, or small-caps OpenType features, which previously failed to write a `.fig` file.
+- Update instance text properties on the canvas while typing, with grouped undo for rapid edits.
+- Point Homebrew installation instructions to the official `openpencil` cask and document separate CLI installation.
+- Reach the custom model option in the model picker for providers with large model catalogs instead of requiring a search for it.
+
+### Performance
+
+- Reduce editor pauses while generating recovery snapshots and exporting text-heavy `.fig` documents.
+- Recompute layout only for the pages an edit affects, instead of every page, when editing a component or its instances.
+
+## 0.15.0 — 2026-09-16
+
+### Breaking changes
+
+- Use MCP SDK v2 server/client types for programmatic MCP integrations. Define custom tools with native Valibot `input` schemas and execution metadata instead of `params`, `ParamDef`, or `paramToZod()`.
+- Replace Scene Graph `overrides` records with `instanceOverrides`, using separate `self` and `descendants` maps. Rename `figmaDerivedLayout`, `figmaDerivedTextGlyphs`, and `FigmaDerivedTextGlyph` to `derivedLayout`, `derivedTextGlyphs`, and `DerivedTextGlyph`.
+- Update custom Vue SDK binding providers to implement `getBindingId()` and handle `unresolved`. Replace `setValue()` with `prepareEdit()`, returning a stable edit key, captured value, setter, and restoration callback.
+- Replace Vue SDK `useDialogMessages()`, `dialogMessages`, and their catalog keys with the corresponding product-domain message composables and catalogs.
+- Use Vue 3.5.41 or newer within Vue 3 for the Vue SDK, and CanvasKit 0.41.1 or newer when supplying its optional CanvasKit peer. Update custom CanvasKit integrations to use `PathBuilder` and immutable `Path` operations.
+
+### Added
+
+- Expose design inspection and undoable layer-property and variable edits to browser agents through experimental WebMCP in supporting browsers, with explicit Off, Inspect, and Edit access controls in Settings.
+- Control custom tool exposure independently through `mcp`, `ai`, and `webmcp` exclusions. Tools are included by default, subject to execution support and user permissions.
 - Bind Design JSX spacing, sizing, corners, and typography directly to numeric document variables.
 - Define component properties and assign instance values in Design JSX using stable property IDs.
 - Save AI conversations and attachment previews locally, switch between chats, rename or delete them, and browse saved transcripts across documents. Choose whether reasoning stays collapsed, expands while thinking, or stays expanded, with animated disclosure controls that respect reduced motion.
-
 - Add a searchable command palette for editor and application actions.
 - Search current AI provider catalogs from model pickers, with curated recommendations, recent compatible models, and offline fallbacks.
 - Render triangle and line arrow stroke caps on lines and open vector paths, and choose them from the stroke cap picker.
 - Expose component properties and instance-swap targets through the Figma API and automation.
-- Normalize imported stroke dash patterns for more reliable `.fig` compatibility.
-
 - Create, select, move, duplicate, transfer, and delete canvas and frame guides directly from rulers, with undoable edits, measurements, context-menu actions, and `.fig` round-trip fidelity.
 - Open to a unified home with recent and configured storage documents in grid or list layouts, and open multiple selected design files in separate tabs.
 - Snap vector points, moved layers, and resized edges to nearby geometry, guides, frame and canvas bounds, and whole-pixel coordinates, with visible alignment guides and persistent snapping preferences.
 - Run Pi through AI SDK HarnessAgent as a configurable desktop provider with saved model profiles, secure credentials, existing MCP design tools, and per-profile thinking and permission settings.
 - Combine components into variant sets through Figma API scripts and automation.
-- Add local AI usage and technical diagnostics, including token telemetry, provider/model summaries, recent failures, configurable retention, export, and clear controls. (#588)
+- Add local AI usage and technical diagnostics, including token telemetry, provider/model summaries, recent failures, configurable retention, export, and clear controls (#588).
 - Import, render, edit, resize, select, and export Figma text-on-path layers while preserving their curved glyph layout.
-- Show temporary Figma-style distance measurements between selected and Option/Alt-hovered layers. (#491)
-- Edit Design JSX and HTML/CSS previews in CodeMirror, with theme-aware highlighting, Tailwind viewing, completion, diagnostics, bounded execution, and session-level undo. (#130)
-- Set provider-specific reasoning effort on supported AI model profiles. (#454)
-- Show unavailable or substituted document fonts with affected-layer selection and retry actions, and expose font fidelity through the Figma API and MCP tooling. (#503)
+- Show temporary Figma-style distance measurements between selected and Option/Alt-hovered layers (#491).
+- Edit Design JSX and HTML/CSS previews in CodeMirror, with theme-aware highlighting, Tailwind viewing, completion, diagnostics, bounded execution, and session-level undo (#130).
+- Set provider-specific reasoning effort on supported AI model profiles (#454).
+- Show unavailable or substituted document fonts with affected-layer selection and retry actions, and expose font fidelity through the Figma API, MCP, and `openpencil fonts [file] --json`. Choose `warn`, `strict`, or `allow` font-substitution policies for file-backed CLI raster and PDF exports with `--font-policy` (#503, #625).
 - Add reusable remote MCP connections for ACP agents, with Streamable HTTP endpoints and credential-backed bearer tokens.
-- Author and manage multidimensional component variants and published component libraries, including revision previews, linked-instance updates, stable library identities, offline catalogs, storage-backed catalogs, and read-only library definitions. (#239)
-- Recover unsaved and pathless documents locally, with settings to disable recovery and remove retained snapshots. (#487, #574)
-- Inspect selected designs with a configured Vision model and attach images to AI chat with bounded analysis and previews. (#232, #471)
-- Pin selected layers as explicit AI chat context, show collapsible reasoning, copy individual responses, and grow the composer with multiline prompts. (#13)
-- Render streaming AI responses with the upstream Comark-based Markdown pipeline and optional Shiki code highlighting without the former project fork.
+- Author and manage multidimensional component variants and published component libraries, including revision previews, linked-instance updates, stable library identities, offline catalogs, storage-backed catalogs, and read-only library definitions (#239).
+- Recover unsaved and pathless documents locally, including after closing their tabs, with options to disable recovery and restore or discard retained snapshots (#487, #505, #574).
+- Inspect selected designs with a configured Vision model and attach images to AI chat with bounded analysis and previews (#232, #471).
+- Pin selected layers as explicit AI chat context, show collapsible reasoning, copy individual responses, and grow the composer with multiline prompts (#13).
 
 ### Changed
 
+- Refresh the OpenPencil mark across the editor, documentation, browser tabs, installed web apps, and desktop icons, with small-size and dark-background adaptations.
 - Explore editable component, typography, and paint comparisons in the demo, with the original examples preserved on a reference page.
 - Use compact desktop Home search actions with consistent responsive layout and control sizing.
-- Keep applied and available Effect styles concise, and collapse equal independent corner fields when all four use the same variable.
 - Keep pixel-grid rounding invisible while showing alignment guides only for real geometry, objects, and canvas/layout guides.
-- Copy selections with embedded images into Figma while preserving typed geometry, text sizing, images, components, variables, modes, and shared styles for lossless in-app paste.
-- Choose whether interface animations follow the system motion preference or stay off, with live updates and a persistent override.
-- Put unbound fill and stroke style pickers in section headers, preserve applied and missing style rows, and remove the redundant Dimensions heading for text layers.
+- Embed images when copying selections into Figma, and preserve geometry, text sizing, component links, variables, modes, and shared styles when pasting within OpenPencil.
+- Choose the app theme and whether animations follow the system or stay off under Appearance in General Settings, with live updates and persistent preferences.
+- Simplify property panels with fill and stroke style pickers in section headers, concise effect style rows, and collapsed equal corner fields when all four share a variable. Preserve applied and missing styles and remove the redundant Dimensions heading for text layers.
 - Open variable pickers below their trigger when space permits, flipping above near the viewport edge.
 - Keep AI chat preferences with the model overview and edit models in a fixed-size Settings pane with explicit Save and Cancel actions.
 - Match page-list density to the layer tree and add subtle, reduced-motion-aware dialog transitions.
 - Fade in streaming Markdown list items and code lines without animating completed responses.
 - Vertically center shaped section titles and allow renaming a section by double-clicking its canvas label.
-- Load supported online fonts before revealing imported pages, preserve substituted text during editing, and shape canvas labels with bundled Inter typography.
-- Upgrade CanvasKit to 0.41 and use immutable renderer paths through `PathBuilder`.
-- Upgrade direct model chat providers and transports to AI SDK 7 while retaining the local ACP execution path.
-- Localize file, clipboard, collaboration, chat, vectorization, storage, recovery, and component-library notifications in every supported language.
-- Move MCP connections into their own Settings destination instead of presenting them as part of model configuration.
+- Load supported online fonts before revealing imported pages, preserve substituted text during editing, and shape canvas labels with Inter typography and shared Arabic/CJK font fallback.
+- Complete translated app, accessibility, font, color, file, clipboard, collaboration, chat, vectorization, storage, recovery, component-library, and connection feedback across supported locales, and synchronize document language with the selected locale.
+- Separate local MCP server controls, browser WebMCP access, and remote connections in Settings, with inline searchable tool permissions.
+- Show translated field errors, hints, and consistent contextual alerts in Settings forms, focus the first invalid field on submission, and explain missing requirements instead of silently disabling Save or Test.
 - Pan horizontally with Shift+wheel while preserving native horizontal trackpad movement.
 
 ### Fixed
 
+- Render four-point diamond gradients, preserve text layout across fill types, and keep image colors accurate on sRGB displays.
+- Keep newly created and edited objects visible during zoom instead of replaying outdated scene content.
+- Keep property fields and paint previews live during editing, rotated selection labels readable and aligned, and object edges stable when previews settle.
+- Show compact bordered section labels with inset nested titles and clearer hover feedback.
 - Keep Undo and Redo commands available as edit history changes, without requiring another scene edit.
 - Avoid recursive desktop HTTP proxy requests when font downloads intercept Tauri IPC traffic.
 - Keep FIT image fills proportional, centered, and fully visible without stretching or cropped edges.
 - Preserve edited instance text, including cleared labels, when saving and reopening `.fig` files.
-- Honor `.pen` frame layout defaults and sizing and padding shorthands so imported auto-layout frames keep their computed dimensions and child positions. (#564)
+- Honor `.pen` frame layout defaults and sizing and padding shorthands so imported auto-layout frames keep their computed dimensions and child positions (#564).
 - Avoid macOS Keychain prompts during credential status checks and pause repeated credential access after failures until explicitly retried from Settings.
-
 - Honor explicit Design JSX instance dimensions and preserve authored overrides through component synchronization.
 - Route browser Command/Ctrl plus and minus shortcuts to canvas zoom instead of page zoom.
-- Resolve `$name` references in imported `.pen` fills, stroke fills, font families, dimensions, and spacing without requiring a `--` prefix. (#563)
+- Resolve `$name` references in imported `.pen` fills, stroke fills, font families, dimensions, and spacing without requiring a `--` prefix (#563).
 - Resolve bound fields in each layer’s mode, keep variable edits scoped and undoable, and make broken bindings visible and recoverable.
 - Display letter spacing in pixels and support explicit automatic line height.
 - Prevent the stock photo tool from replacing text, lines, structural layers, or containers with content while supporting closed shape geometry.
-- Preserve explicit text alignment metadata on imported Figma vectors across save and reload.
-
-- Preserve explicit normal blend modes on imported Figma text and vector nodes across save and reload.
-
-- Preserve implicit fixed-size text inside imported Figma auto-layout frames across save and reload.
+- Preserve imported Figma text alignment metadata, explicit normal blend modes on text and vectors, and implicit fixed text sizing in auto-layout frames across save and reload.
+- Render imported Figma strokes with odd-length dash patterns correctly.
 - Stop showing a misleading desktop-only warning when web font loading or catalog lookup fails.
-- Preserve source text offsets when resolving fallback languages after text-case transformations.
-- Track character coverage restored from downloaded font cache entries.
-
+- Resolve fallback fonts reliably for cached characters, mixed-language text, and text-case transformations.
 - Preserve imported Figma divider-line geometry during auto-layout recomputation, preventing half-pixel shifts on save and reload.
-
-- Resolve package imports under Node and Bun from ordinary tarballs while preserving Bun source-first workspace execution. (#663)
+- Resolve package imports under Node and Bun from ordinary tarballs while preserving Bun source-first workspace execution (#663).
 - Use the user's home directory as the default MCP file root on Windows, avoiding the caller's unreliable working directory.
-- Open legacy raw `.fig` files that store the Kiwi document and thumbnail without a ZIP wrapper. (#582)
-- Preserve a frame's auto-layout HUG sizing mode when converting it into a component with `create_component`.
-- Run `openpencil import` on Node so npm-installed CLI users no longer encounter `Bun is not defined`. (#575)
+- Open legacy raw `.fig` files that store the Kiwi document and thumbnail without a ZIP wrapper (#582).
+- Preserve a frame's auto-layout HUG sizing, variable bindings, and variable modes when converting it into a component through the Figma API or automation (#595).
+- Run `openpencil import` on Node so npm-installed CLI users no longer encounter `Bun is not defined` (#575).
 - Generate recent-file previews from the conventional `Cover` page without modifying the source file.
-- Isolate browser-development MCP servers behind worktree-aware Portless WebSocket routes and per-runtime socket/discovery paths, preventing concurrent worktrees from competing for port 7600 or the global MCP socket.
-- Resolve Vue SDK semantic test selectors correctly in non-browser runtimes. (#397)
-- Commit vector vertex and Bézier-handle edits when the pointer is released and keep transformed vector-edit overlays aligned. (#586)
-- Preserve app-created component properties and instance-swap targets across `.fig` save and reload cycles. (#548)
-
-- Reconnect desktop automation to an already-running MCP server through its discovery file. (#546)
-- Keep text-editing carets, hit testing, and selection highlights aligned with vertically centered or bottom-aligned text. (#539)
-- Match AI chat code-block colors and backgrounds to the active theme, and let desktop users select and copy chat text without replacing it with canvas layers. (#537, #538)
+- Resolve Vue SDK semantic test selectors correctly in non-browser runtimes (#397).
+- Commit vector vertex and Bézier-handle edits when the pointer is released and keep transformed vector-edit overlays aligned (#586).
+- Preserve app-created component properties and instance-swap targets across `.fig` save and reload cycles (#548).
+- Reconnect desktop automation to an already-running MCP server through its discovery file (#546).
+- Keep text-editing carets, hit testing, and selection highlights aligned with vertically centered or bottom-aligned text (#539).
+- Match AI chat code-block colors and backgrounds to the active theme, and let desktop users select and copy chat text without replacing it with canvas layers (#537, #538).
 - Restore visible above, below, and child drop feedback while dragging layers in the Layers panel.
 - Place editor-created instances beside nested source components in world space, including transformed parents.
 - Prevent malformed collaboration updates from corrupting synchronized nodes or derived text rendering.
-- Transfer native `.fig` exports over binary Tauri IPC, preventing large desktop saves from being truncated or exhausting WebView memory. (#484)
-- Keep unsaved source-less documents recoverable after their editor tab is closed.
-- Decode zstd-compressed FIG containers, reject invalid compressed payloads, and preserve exact fixture byte ranges. (#397)
-- Compose caller CSS with Tailwind defaults when importing DOM/CSS documents. (#397)
-- Preserve desktop HTTP timeout, abort, and empty-response semantics. (#397)
-- Report whether missing Figma clipboard images were actually fetched. (#397)
-- Report exhausted provider credit, request failures, and output-token limits through localized chat toasts and copied diagnostics. (#451, #454)
+- Transfer native `.fig` exports over binary Tauri IPC, preventing large desktop saves from being truncated or exhausting WebView memory (#484).
+- Decode zstd-compressed FIG containers and reject invalid compressed payloads (#397).
+- Compose caller CSS with Tailwind defaults when importing DOM/CSS documents (#397).
+- Preserve desktop HTTP timeout, abort, and empty-response semantics (#397).
+- Report whether missing Figma clipboard images were actually fetched (#397).
+- Report exhausted provider credit, request failures, and output-token limits through localized chat toasts and copied diagnostics (#451, #454).
 - Prevent Windows desktop crashes when loading large system fonts for non-Latin text.
-- Preserve open vector segments when the same vector network also contains filled regions. (#450)
-- Match Figma Plugin API behavior for `rescale()`, page `backgrounds`, and nullable visual `absoluteRenderBounds`. (#442)
-- Keep imported Figma instances linked to their remapped source components so later component edits update existing instances. (#385)
+- Preserve open vector segments when the same vector network also contains filled regions (#450).
+- Match Figma Plugin API behavior for `rescale()`, page `backgrounds`, and nullable visual `absoluteRenderBounds` (#442).
+- Keep imported and pasted Figma instances linked to their remapped source components so later component edits update existing instances (#385).
 - Restore native copy, cut, and paste shortcuts in desktop text inputs while preserving design clipboard handling on the canvas.
-- Preserve selected layers when browser clipboard serialization fails during cut operations, and fall back to the session clipboard when system clipboard access is unavailable. (#568)
-- Treat MCP tool results with an omitted `isError` field as successful while preserving explicit MCP errors. (#583)
-- Remove the permanent CORS configuration action from cloud-storage settings and report connection results through standard toasts with clear browser-specific guidance.
-- Complete translated app, accessibility, font, color, collaboration, import, connection-test, and browser fallback text across all supported locales, and synchronize document language with the selected locale.
-- Preserve effective nested instance text overrides when importing complex Figma component hierarchies. (#102)
+- Preserve committed desktop text input when the WebView supplies text through the input event before updating the hidden text field (#607).
+- Preserve selected layers when browser clipboard serialization fails during cut operations, and fall back to the session clipboard when system clipboard access is unavailable (#568).
+- Treat MCP tool results with an omitted `isError` field as successful while preserving explicit MCP errors (#583).
+- Preserve effective nested instance text overrides when importing complex Figma component hierarchies (#102).
 - Preserve SVG clip paths, including clip shapes referenced through `<use>`, when importing editable vectors.
-- Preserve circles, ellipses, rectangles, lines, polylines, and polygons supplied as JSX children of inline SVG elements. (#452)
-- Preserve component links when pasting Figma instances so later component edits continue to update them.
-- Stop local MCP servers after the app disconnects instead of leaving orphaned background processes. (#494)
+- Preserve circles, ellipses, rectangles, lines, polylines, and polygons supplied as JSX children of inline SVG elements (#452).
+- Stop local MCP servers after the app disconnects instead of leaving orphaned background processes (#494).
+- Prevent unbounded instance duplication when editing Figma-imported or pasted components with serialized or renamed children, keep extra instance children in their intended order, and avoid pasted instances re-linking pre-existing instances during clipboard import.
 
-- Prevent unbounded instance duplication when editing Figma-imported or pasted components with serialized or renamed children, keep extra instance children stable instead of yanking them to the front, and avoid pasted instances re-linking pre-existing instances during clipboard import.
 ### Performance
 
-- Scope automation and Figma API layout reconciliation to graph nodes and parent containers actually changed by each mutation.
+- Reduce pauses after repeated frame creation without leaving hidden property edits or popups active.
+- Reduce repeated text shaping and scene invalidation while moving and resizing objects, and reuse fitting canvas labels during zoom.
+- Reduce unnecessary layout work after automation and Figma API edits by updating only affected layers and containers.
 - Keep rapid trackpad zoom reversals and effect-heavy document navigation responsive by cancelling obsolete reconstruction and reusing safe raster snapshots.
 - Show the FIG page list from a lightweight Kiwi scan before materializing the full document.
 - Avoid redundant collaboration writes when synchronized node fields have not changed.
-- Release obsolete streamed Markdown parser history after each AI response completes, preventing chat memory from multiplying with every streamed chunk. (#544)
-- Open large documents faster by using cached world positions while finding layers under the pointer. (#527)
-- Coalesce writable-document autosaves that overlap an active `.fig` export while preserving a trailing save for newer edits. (#528)
-- Defer JSX generation and syntax highlighting until the Code panel is active, keeping large canvas selections responsive. (#500)
-- Index Figma clipboard children once during import instead of rescanning every pasted node, keeping large flat pastes linear. (#500)
+- Release completed streaming-response state to reduce retained chat memory (#544).
+- Open large documents faster by reducing repeated position calculations when finding layers under the pointer (#527).
+- Avoid redundant autosaves while a `.fig` export is in progress, while ensuring newer edits are saved afterward (#528).
+- Defer JSX generation and syntax highlighting until the Code panel is active, keeping large canvas selections responsive (#500).
+- Paste large, flat Figma selections faster by avoiding repeated scans of clipboard layers (#500).
 - Reduce peak memory during `.fig` export by sharing immutable binary resources with the isolated export graph.
 
+### Security
+
+- Protect new real-time collaboration sessions with stronger invitation credentials.
 
 ## 0.14.0 — 2026-08-10
 
@@ -579,7 +662,6 @@
 - Fix component property override resolution through clone chains.
 - Fix text/property overrides clobbered by second transitive sync.
 
-
 - Fix text rendering with wrong fonts on file open — all font weights (including default family) are now loaded before the first render.
 - Fix `weightToStyle` mapping: weight 400 now correctly maps to "Regular" instead of "Medium".
 - Fix detached ArrayBuffer crash when switching pages after saving — export worker now copies image buffers before transferring.
@@ -702,7 +784,6 @@
 - Centralize all color utilities in `packages/core/src/color.ts` — `colorToHex8`, `colorToCSSCompact`, `normalizeColor`, `colorDistance`; remove 5 duplicate implementations across the codebase.
 - Add `geometry.ts` with shared rotation math (`degToRad`, `radToDeg`, `rotatePoint`, `rotatedCorners`, `rotatedBBox`).
 - Extract `isArrayMixed()` helper for multi-selection property panels.
-
 
 - Add `motion-v` for declarative animations — used in mobile drawer (spring-animated height with pan gestures) and toolbar (layout-animated category switching with directional slide transitions).
 - Mobile drawer: replace `useSwipe` + manual rAF animation with `motion.div` `:animate` + `@pan`/`@panEnd`; always-on tab state (no more null `activeRibbonTab`); content stays rendered when closed.
@@ -854,17 +935,14 @@
 - Fix font picker dropdown truncating long font names.
 - Show explanation in font picker when Local Font Access API unavailable (Safari/Firefox).
 
-
 - Auto-populate GitHub Release notes from CHANGELOG.md via `ffurrer2/extract-release-notes@v2`.
 - Skip already-published npm versions on CI re-runs instead of failing.
 - Exclude non-app directories from Vite file watcher.
-
 
 - Extract shared color constants (`BLACK`, `TRANSPARENT`, `DEFAULT_SHADOW_COLOR`) — replaces 8 inline literals across core.
 - Extract shared `NodeContextMenuContent` component to avoid menu duplication.
 - Fix `@open-pencil/core` dep in MCP package: `workspace:*` for local dev (pnpm resolves at publish time).
 - Replace store thunks with a late-binding proxy.
-
 
 - Clipboard roundtrip tests: encode to Figma Kiwi binary → decode → verify.
 - 9 visual regression snapshot tests for effects rendering.
@@ -896,7 +974,6 @@
 
 - Import additional properties from Figma clipboard: `layoutAlignSelf`, `clipsContent`, `fontWeight`, `italic`, `letterSpacing`, `lineHeight`.
 - Convert `letterSpacing` PERCENT units to pixels based on font size.
-
 
 - 7 new clipboard import unit tests (14 total).
 
@@ -1037,12 +1114,10 @@ First public alpha. The editor is functional but not production-ready.
 - ScrubInput drag-to-change number controls.
 - Resizable side panels via reka-ui Splitter.
 
-
 - .fig file import via Kiwi binary codec (194 definitions, ~390 fields).
 - .fig file export with Kiwi encoding, Zstd compression, thumbnail generation.
 - Figma clipboard: copy/paste between OpenPencil and Figma.
 - Round-trip fidelity for supported node types.
-
 
 - Built-in AI chat in properties panel (⌘J).
 - Direct browser → OpenRouter communication, no backend.
@@ -1051,11 +1126,9 @@ First public alpha. The editor is functional but not production-ready.
 - Streaming markdown responses (vue-stream-markdown).
 - Tool call timeline with collapsible details.
 
-
 - JSX export of selected nodes with Tailwind-like shorthand props.
 - Syntax highlighting via Prism.js.
 - Copy to clipboard.
-
 
 - `info` — document stats, node types, fonts.
 - `tree` — visual node tree.
@@ -1071,13 +1144,11 @@ First public alpha. The editor is functional but not production-ready.
 - `analyze clusters` — repeated patterns.
 - All commands support `--json`.
 
-
 - Scene graph with flat Map storage and parentIndex tree.
 - FigmaAPI with ~65% Figma plugin API compatibility.
 - JSX renderer (TreeNode builder functions with shorthand props).
 - Kiwi binary codec (encode/decode).
 - Vector network blob encoder/decoder.
-
 
 - Tauri v2 (~5 MB).
 - Native menu bar, save/open dialogs.
@@ -1085,11 +1156,9 @@ First public alpha. The editor is functional but not production-ready.
 - Zstd compression in Rust.
 - macOS and Windows builds via GitHub Actions.
 
-
 - Runs at [app.openpencil.dev](https://app.openpencil.dev).
 - No installation required.
 - File System Access API for save/open (Chrome/Edge), download fallback elsewhere.
-
 
 - [openpencil.dev](https://openpencil.dev) — VitePress site with user guide, reference, and development docs.
 - Deployed via Cloudflare Pages.

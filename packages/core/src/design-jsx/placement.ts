@@ -1,9 +1,8 @@
+import type { RenderResult } from '@open-pencil/design-jsx'
 import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import { findPageId } from '#core/io/subgraph'
 import { computeAllLayouts } from '#core/layout'
-
-import type { RenderResult } from './renderer'
 
 /** Placement fields shared by the render tool and its speculative preview. */
 export interface RenderPlacementInput {

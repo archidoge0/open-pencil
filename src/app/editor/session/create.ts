@@ -28,6 +28,7 @@ import {
 } from '@/app/editor/session/modules'
 import { createInitialAppEditorState, type AppEditorState } from '@/app/editor/session/types'
 import { notificationMessages } from '@/app/i18n/notifications'
+import { createDeferred } from '@/app/runtime/deferred'
 import { toast } from '@/app/shell/ui'
 import { IS_BROWSER, IS_TAURI } from '@/constants'
 
@@ -54,7 +55,7 @@ export function createEditorStore(initialGraph?: SceneGraph) {
             height: IS_BROWSER ? window.innerHeight : 1080
           }
   })
-  const canvasReadiness = Promise.withResolvers<undefined>()
+  const canvasReadiness = createDeferred<undefined>()
   const io = new IORegistry(BUILTIN_IO_FORMATS)
   bindClipboardNotifications(editor)
 
@@ -62,7 +63,21 @@ export function createEditorStore(initialGraph?: SceneGraph) {
     editor.subscribeToGraph()
   }
 
-  const { selectedNodes, selectedNode, layerTree } = createEditorComputedRefs(editor, state)
+  const { selectedNodes, selectedNode, layerTree, disposeSelection } = createEditorComputedRefs(
+    editor,
+    state
+  )
+  // Mirror the document color space into app state so UI can react to it.
+  const syncDocumentColorSpace = () => {
+    state.documentColorSpace = editor.graph.documentColorSpace
+  }
+  syncDocumentColorSpace()
+  const stopColorSpaceSync = editor.onEditorEvent(
+    'document:color-space-changed',
+    syncDocumentColorSpace
+  )
+  editor.onEditorEvent('graph:replaced', syncDocumentColorSpace)
+
   const preparationEvents = createEditorPreparationEvents()
   const preparationLifecycle = new Map<
     number,
@@ -215,7 +230,12 @@ export function createEditorStore(initialGraph?: SceneGraph) {
     setSplitSizes: panes.setSplitSizes,
 
     // App-specific overrides and additions
-    ...modules
+    ...modules,
+    dispose() {
+      stopColorSpaceSync()
+      disposeSelection()
+      modules.dispose()
+    }
   }
 
   defineEditorStoreAccessors(store, editor)

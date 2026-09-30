@@ -1,11 +1,8 @@
 import type { CanvasKit, SkPicture } from 'canvaskit-wasm'
 import { watch } from 'vue'
 
-import {
-  recordJSXPreview,
-  stageJSXPreview,
-  type JSXPreviewNode
-} from '@open-pencil/core/design-jsx'
+import { recordJSXPreview, stageJSXPreview } from '@open-pencil/core/design-jsx'
+import type { JSXPreviewNode } from '@open-pencil/design-jsx'
 import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import {

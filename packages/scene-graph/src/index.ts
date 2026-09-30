@@ -21,6 +21,7 @@ export {
   type InstanceOverrideState
 } from './instance-overrides'
 export * from './snap'
+export * from './export-format'
 export * from './export-scale'
 export * from './coordinate'
 export * from './constants'
@@ -40,8 +41,9 @@ import { cloneNodeProps } from './copy'
 import { bindNodeEvents } from './events'
 import * as HitTest from './hit-test'
 import * as Instances from './instances'
+import Matrix, { type Mat3 } from './matrix'
 import { CONTAINER_TYPES, createDefaultNode } from './node-defaults'
-import { updateNodePreview } from './preview'
+import { updateNodePreview, type NodePreviewObserver } from './preview'
 import { styleDetachmentChanges } from './shared-styles'
 import { markSourceFieldsEdited } from './source-metadata'
 import { GLYPH_AFFECTING_KEYS, invalidateTextCaches, TEXT_PICTURE_KEYS } from './text-picture'
@@ -53,7 +55,13 @@ export * from './types'
 
 import type { Emitter } from 'nanoevents'
 
-import { getAbsolutePosition } from './coordinate'
+import {
+  getAbsolutePosition,
+  getNodeLocalMatrix,
+  getParentWorldMatrix,
+  isTranslationOnly,
+  localTransformFromWorld
+} from './coordinate'
 import type { Color, Rect, Vector } from './primitives'
 import type {
   DocumentColorSpace,
@@ -95,6 +103,8 @@ function stripUndefinedProps<T extends object>(obj: T): T {
   return result
 }
 
+export { captureGraphCheckpoint } from './checkpoint'
+
 export class SceneGraph {
   nodes = new Map<string, SceneNode>()
   images = new Map<string, Uint8Array>()
@@ -105,11 +115,12 @@ export class SceneGraph {
   figKiwiVersion: number | null = null
   /** Deflated kiwi schema bytes from the original .fig file, preserved for roundtrip fidelity. */
   figSchemaDeflated: Uint8Array | null = null
-  documentColorSpace: DocumentColorSpace = 'display-p3'
+  documentColorSpace: DocumentColorSpace = 'srgb'
   enabledLibraries = new Map<string, EnabledLibraryBinding>()
   readonly emitter: Emitter<SceneGraphEvents> = createNanoEvents()
   private absPosCache = new Map<string, Vector>()
   private previewMutationDepth = 0
+  private previewObservers: NodePreviewObserver[] = []
   private sourceMetadataPreservationDepth = 0
   private layoutMutationDepth = 0
   positionPreviewVersion = 0
@@ -384,11 +395,13 @@ export class SceneGraph {
     'maxHeight'
   ])
 
-  runPreviewUpdates(fn: () => void): void {
+  runPreviewUpdates(fn: () => void, beforeUpdate?: NodePreviewObserver): void {
     this.previewMutationDepth++
+    if (beforeUpdate) this.previewObservers.push(beforeUpdate)
     try {
       fn()
     } finally {
+      if (beforeUpdate) this.previewObservers.pop()
       this.previewMutationDepth--
     }
   }
@@ -415,7 +428,9 @@ export class SceneGraph {
     this.updateNodePreview(id, { x, y })
   }
   updateNodePreview(id: string, changes: Partial<SceneNode>): void {
-    const appliedChanges = updateNodePreview(this, id, changes)
+    const appliedChanges = updateNodePreview(this, id, changes, (node, applied) => {
+      for (const observe of this.previewObservers) observe(node, applied)
+    })
     if (appliedChanges) this.emitter.emit('node:previewUpdated', id, appliedChanges)
   }
 
@@ -428,6 +443,30 @@ export class SceneGraph {
     const node = this.nodes.get(id)
     if (!node) return
     changes = stripUndefinedProps(styleDetachmentChanges(node, stripUndefinedProps(changes)))
+    this.applyNodeChanges(node, changes)
+  }
+
+  /** Replay captured properties without dropping explicit undefined values or absent keys. */
+  restoreNodeProperties(
+    id: string,
+    changes: Partial<SceneNode>,
+    absent: readonly (keyof SceneNode)[]
+  ): void {
+    const node = this.nodes.get(id)
+    if (node) this.applyNodeChanges(node, changes, absent)
+  }
+
+  private applyNodeChanges(
+    node: SceneNode,
+    changes: Partial<SceneNode>,
+    absent: readonly (keyof SceneNode)[] = []
+  ): void {
+    const { id } = node
+    // Include removed keys in cache invalidation and update notifications.
+    if (absent.length) {
+      changes = { ...changes }
+      for (const key of absent) Reflect.set(changes, key, undefined)
+    }
 
     // Only clear absPosCache when layout-affecting properties change.
     // Fills, strokes, effects, plugin data changes do NOT affect absolute position.
@@ -458,6 +497,7 @@ export class SceneGraph {
     Object.assign(node, changes)
     if (changes.fills) removeStaleBindings(node, 'fills', changes)
     if (changes.strokes) removeStaleBindings(node, 'strokes', changes)
+    for (const key of absent) Reflect.deleteProperty(node, key)
     this.emitter.emit('node:updated', id, changes)
   }
 
@@ -474,12 +514,8 @@ export class SceneGraph {
     const oldParentId = node.parentId
     this.absPosCache.clear()
 
-    const absPos = this.getAbsolutePosition(nodeId)
-    const newParentNode = this.nodes.get(newParentId)
-    const newParentAbs =
-      newParentId === this.rootId || newParentNode?.type === 'CANVAS'
-        ? { x: 0, y: 0 }
-        : this.getAbsolutePosition(newParentId)
+    const oldParentWorld = this.parentWorldMatrix(oldParent)
+    const newParentWorld = this.parentWorldMatrix(newParent)
 
     if (oldParent) {
       oldParent.childIds = oldParent.childIds.filter((cid) => cid !== nodeId)
@@ -488,10 +524,20 @@ export class SceneGraph {
     node.parentId = newParentId
     newParent.childIds.push(nodeId)
 
-    node.x = absPos.x - newParentAbs.x
-    node.y = absPos.y - newParentAbs.y
+    if (isTranslationOnly(oldParentWorld) && isTranslationOnly(newParentWorld)) {
+      node.x += oldParentWorld[2] - newParentWorld[2]
+      node.y += oldParentWorld[5] - newParentWorld[5]
+    } else {
+      const world = Matrix.multiply(oldParentWorld, getNodeLocalMatrix(node))
+      const local = localTransformFromWorld(node, world, newParentWorld)
+      if (local) Object.assign(node, local)
+    }
 
     this.emitter.emit('node:reparented', nodeId, oldParentId, newParentId)
+  }
+
+  private parentWorldMatrix(parent: SceneNode | undefined): Mat3 {
+    return getParentWorldMatrix(parent, this)
   }
 
   reorderChild(nodeId: string, parentId: string, insertIndex: number): void {

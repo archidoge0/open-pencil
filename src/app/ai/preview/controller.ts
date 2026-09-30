@@ -1,4 +1,4 @@
-import { createStreamingJSXParser, type JSXPreviewNode } from '@open-pencil/core/design-jsx'
+import { createStreamingJSXParser, type JSXPreviewNode } from '@open-pencil/design-jsx'
 
 import { readPreviewInput, type RenderPreviewInput } from './input'
 

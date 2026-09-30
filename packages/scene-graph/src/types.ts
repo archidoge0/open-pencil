@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- scene node contracts are kept together as the public graph type surface */
 
+import type { ExportFormatId } from './export-format'
 import type { CanvasGuide } from './guides'
 import type { InstanceOverrideState } from './instance-overrides'
 import type { Color, Matrix, Rect, Vector } from './primitives'
@@ -304,8 +305,6 @@ export interface PluginDataEntry {
   key: string
   value: string
 }
-
-export type ExportFormatId = 'png' | 'jpg' | 'webp' | 'svg' | 'pdf'
 
 export interface ExportSetting {
   scale: number
@@ -615,6 +614,11 @@ export interface Variable {
   /** Published library version (from NodeChange.version). Used for assetRef resolution in colorVar. */
   version?: string
 }
+
+/** Scalar numeric node fields accepted by numeric property controls. */
+export type NumericNodeProperty = {
+  [K in keyof SceneNode]-?: SceneNode[K] extends number ? K : never
+}[keyof SceneNode]
 
 export interface VariableCollectionMode {
   modeId: string
