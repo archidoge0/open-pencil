@@ -15,12 +15,17 @@ export async function setupCanvas(page: Page) {
   })
 }
 
+/** Previews the canvas draws: those of the page on screen. */
 export async function previewKey(page: Page) {
   return page.evaluate(
     () =>
       window.openPencil
         ?.getStore?.()
-        .canvasRenderers.flatMap((renderer) => [...renderer.transientPreviews.keys()])
+        .canvasRenderers.flatMap((renderer) =>
+          [...renderer.transientPreviews]
+            .filter(([, preview]) => preview.pageId === renderer.pageId)
+            .map(([key]) => key)
+        )
         .join(',') ?? ''
   )
 }
@@ -33,13 +38,31 @@ export function documentSnapshot(page: Page) {
   })
 }
 
-export async function documentState(page: Page) {
-  return page.evaluate(() => {
+/** Children of `pageId`, or of the page on screen, and whether undo is available. */
+export async function documentState(page: Page, pageId?: string) {
+  return page.evaluate((id) => {
     const store = window.openPencil?.getStore?.()
     if (!store) throw new Error('Editor unavailable')
     return {
-      children: store.graph.getNode(store.state.currentPageId)?.childIds ?? [],
+      children: store.graph.getNode(id ?? store.state.currentPageId)?.childIds ?? [],
       undo: store.undo.canUndo
     }
-  })
+  }, pageId)
+}
+
+/** Add a page without switching to it; returns the page on screen and the new page. */
+export async function addPage(page: Page, name: string) {
+  return page.evaluate((pageName) => {
+    const store = window.openPencil?.getStore?.()
+    if (!store) throw new Error('Editor unavailable')
+    return { current: store.state.currentPageId, added: store.graph.addPage(pageName).id }
+  }, name)
+}
+
+export async function switchPage(page: Page, pageId: string) {
+  await page.evaluate(async (id) => {
+    const store = window.openPencil?.getStore?.()
+    if (!store) throw new Error('Editor unavailable')
+    await store.switchPage(id)
+  }, pageId)
 }

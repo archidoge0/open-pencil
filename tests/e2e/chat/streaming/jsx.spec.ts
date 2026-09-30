@@ -1,6 +1,12 @@
 import { CanvasHelper } from '#tests/helpers/canvas'
 import { expect, test } from '#tests/helpers/chat/fixture'
-import { setupCanvas, previewKey, documentState } from '#tests/helpers/chat/render-preview'
+import {
+  addPage,
+  documentState,
+  previewKey,
+  setupCanvas,
+  switchPage
+} from '#tests/helpers/chat/render-preview'
 import { installRenderStream } from '#tests/helpers/chat/render-stream'
 
 const opening =
@@ -101,27 +107,33 @@ test('preserves a replacement target until completion and restores it on undo', 
   }
 })
 
-test('clears previews on page switches even while the provider is paused', async ({
+test('keeps the run and its preview on their page while the user views another', async ({
   configuredChat: chat
 }) => {
   await setupCanvas(chat.page)
+  const pages = await addPage(chat.page, 'Other')
   const stream = await installRenderStream(chat.page, scenario)
   try {
     await chat.submit('Render a card')
     await expect.poll(() => stream.evaluate((s) => s.ready())).toBe(true)
     await stream.evaluate((s) => s.advance())
     await expect.poll(() => previewKey(chat.page)).not.toBe('')
-    await chat.page.evaluate(async () => {
-      const store = window.openPencil?.getStore?.()
-      if (!store) throw new Error('Editor unavailable')
-      const original = store.state.currentPageId
-      const other = store.graph.addPage('Other')
-      await store.switchPage(other.id)
-      await store.switchPage(original)
-    })
+
+    await switchPage(chat.page, pages.added)
     expect(await previewKey(chat.page)).toBe('')
-    expect(await documentState(chat.page)).toEqual({ children: [], undo: false })
-    await chat.page.getByTestId('chat-stop-button').click()
+    await expect(chat.page.getByTestId('chat-stop-button')).toBeVisible()
+
+    await switchPage(chat.page, pages.current)
+    await expect.poll(() => previewKey(chat.page)).not.toBe('')
+
+    await switchPage(chat.page, pages.added)
+    await stream.evaluate((s) => s.complete())
+    await expect(chat.assistantMessage()).toContainText('Rendered.')
+    expect((await documentState(chat.page, pages.current)).children).toHaveLength(1)
+    expect((await documentState(chat.page, pages.added)).children).toHaveLength(0)
+    expect(
+      await chat.page.evaluate(() => window.openPencil?.getStore?.().state.currentPageId)
+    ).toBe(pages.added)
   } finally {
     await stream.evaluate((s) => s.dispose())
     await stream.dispose()

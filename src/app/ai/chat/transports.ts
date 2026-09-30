@@ -19,7 +19,7 @@ import { buildReasoningProviderOptions, type AIProviderOptions } from '@/app/ai/
 import SYSTEM_PROMPT from '@/app/ai/chat/system-prompt'
 import { createAIModelRuntime, resolveModelConnectionAPIKey } from '@/app/ai/models'
 import { createCanvasJSXPreview } from '@/app/ai/preview/canvas'
-import { createAITools, recordStep, resetRunSteps } from '@/app/ai/tools'
+import { createAITools, recordStep, runPageId, startRun } from '@/app/ai/tools'
 import { enabledAIToolDefinitions } from '@/app/ai/tools/catalog'
 import { aiToolOverrides } from '@/app/ai/tools/preferences'
 import {
@@ -96,7 +96,7 @@ export function createToolLoopTransport({
   diagnosticContext = {}
 }: ToolLoopTransportOptions) {
   const tools = createAITools(store, diagnosticContext)
-  const preview = createCanvasJSXPreview(store)
+  const preview = createCanvasJSXPreview(store, () => runPageId(store))
   const renderTool = tools.render
   renderTool.onInputStart = ({ toolCallId, abortSignal }) => preview.start(toolCallId, abortSignal)
   renderTool.onInputDelta = ({ toolCallId, inputTextDelta }) =>
@@ -123,7 +123,7 @@ export function createToolLoopTransport({
         enabledAIToolDefinitions(aiToolOverrides.value).map((tool) => tool.name)
       )
       preview.clear()
-      resetRunSteps(store, stepLimit)
+      startRun(store, stepLimit)
       return {
         ...options,
         stopWhen: stepCountIs(stepLimit),

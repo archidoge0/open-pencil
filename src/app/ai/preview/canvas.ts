@@ -32,14 +32,18 @@ function countNodes(tree: JSXPreviewNode): number {
 }
 
 /** Bind speculative pictures to this editor only; document data is never mutated. */
-export function createCanvasJSXPreview(store: EditorStore) {
+/**
+ * Bind speculative pictures to this editor. Previews belong to `pageId()`, the run's page:
+ * the renderer shows them only while that page is on screen, so page switches hide them.
+ */
+export function createCanvasJSXPreview(store: EditorStore, pageId: () => string) {
   let subscriptions: (() => void)[] = []
 
   function isCurrent(target: PreviewTarget): boolean {
     return (
       getActiveEditorStoreOrNull() === store &&
       store.graph === target.graph &&
-      store.state.currentPageId === target.pageId
+      store.graph.getNode(target.pageId)?.type === 'CANVAS'
     )
   }
 
@@ -52,7 +56,6 @@ export function createCanvasJSXPreview(store: EditorStore) {
     if (getActiveEditorStoreOrNull() !== store || !store.renderer) return null
     if (subscriptions.length === 0) {
       subscriptions = [
-        store.onEditorEvent('page:changed', () => controller.clear()),
         store.onEditorEvent('graph:replaced', () => controller.clear()),
         store.onEditorEvent('node:created', () => controller.clear()),
         store.onEditorEvent('node:updated', () => controller.clear()),
@@ -68,7 +71,7 @@ export function createCanvasJSXPreview(store: EditorStore) {
         )
       ]
     }
-    return { graph: store.graph, pageId: store.state.currentPageId }
+    return { graph: store.graph, pageId: pageId() }
   }
 
   async function build(
