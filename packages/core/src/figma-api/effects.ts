@@ -29,11 +29,13 @@ const BLEND_MODES = Object.keys(BLEND_MODE_KEYS) as BlendMode[]
 /** Effect kinds Figma's plugin API accepts that OpenPencil does not model yet. */
 const UNSUPPORTED_EFFECT_TYPES = new Set(['NOISE', 'TEXTURE', 'GLASS', 'SHADER'])
 
-const unit = v.pipe(v.number(), v.minValue(0), v.maxValue(1))
-const nonNegative = v.pipe(v.number(), v.minValue(0))
+// Figma rejects Infinity as well as NaN ("Number must be finite").
+const finite = v.pipe(v.number(), v.finite())
+const unit = v.pipe(finite, v.minValue(0), v.maxValue(1))
+const nonNegative = v.pipe(finite, v.minValue(0))
 
 const color = v.strictObject({ r: unit, g: unit, b: unit, a: unit })
-const vector = v.strictObject({ x: v.number(), y: v.number() })
+const vector = v.strictObject({ x: finite, y: finite })
 // Variable bindings on effects are not supported; Figma reports an empty object.
 const boundVariables = v.optional(v.strictObject({}))
 
@@ -41,7 +43,7 @@ const shadowEntries = {
   color,
   offset: vector,
   radius: nonNegative,
-  spread: v.optional(v.number()),
+  spread: v.optional(finite),
   visible: v.boolean(),
   blendMode: v.picklist(BLEND_MODES),
   boundVariables
