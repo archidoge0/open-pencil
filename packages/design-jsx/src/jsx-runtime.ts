@@ -1,4 +1,4 @@
-import { node, type BaseProps, type TreeNode, type TextProps } from './tree'
+import { FRAGMENT, node, type BaseProps, type TreeNode, type TextProps } from './tree'
 
 export function jsx(type: string | ((props: BaseProps) => TreeNode), props: BaseProps): TreeNode {
   if (typeof type === 'function') {
@@ -12,7 +12,7 @@ export const jsxDEV = jsx
 
 /** Groups siblings the way `<>…</>` does in `renderJSX` strings: a node with an empty type. */
 export function Fragment({ children }: { children?: unknown }): TreeNode {
-  return node('', { children })
+  return node(FRAGMENT, { children })
 }
 
 export namespace JSX {

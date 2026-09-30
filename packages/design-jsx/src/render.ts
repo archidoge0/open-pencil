@@ -5,7 +5,7 @@ import type { SceneGraph } from '@open-pencil/scene-graph'
 
 import { designJSXHelpers } from './helpers'
 import * as React from './mini-react'
-import { renderTree, type RenderResult } from './renderer'
+import { renderRoots, renderTree, type RenderResult } from './renderer'
 import { DESIGN_JSX_SUPPORTED_PROPERTIES } from './schema'
 import type { DesignJSXServices } from './services'
 import { isTreeNode, resolveToTree, type TreeNode } from './tree'
@@ -119,22 +119,9 @@ async function renderJSX<Artwork>(
   // A helper called in a loop reports each ignored option once.
   const warnings = uniq([...unsupportedPropWarnings(tree), ...helperWarnings])
 
-  if (tree.type === '' && tree.children.length > 0) {
-    const results: RenderResult[] = []
-    for (const child of tree.children) {
-      if (typeof child === 'string') continue
-      results.push(await renderTree(services, graph, child, options))
-    }
-    if (results.length === 0) {
-      throw new Error('JSX must return a Figma element (Frame, Text, etc)')
-    }
-    if (warnings.length > 0) results[0].warnings = warnings
-    return results
-  }
-
-  const result = await renderTree(services, graph, tree, options)
-  if (warnings.length > 0) result.warnings = warnings
-  return [result]
+  const results = await renderRoots(services, graph, tree, options)
+  if (warnings.length > 0) results[0].warnings = warnings
+  return results
 }
 
 /**

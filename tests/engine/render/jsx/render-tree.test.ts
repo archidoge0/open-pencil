@@ -474,6 +474,31 @@ describe('renderTree', () => {
   })
 })
 
+describe('fragments', () => {
+  it('renders every root of a fragment and returns the first', async () => {
+    const g = makeSceneGraph()
+    const pageId = g.getPages()[0].id
+    const before = getNodeOrThrow(g, pageId).childIds.length
+    const result = await renderTree(g, {
+      type: '',
+      props: {},
+      children: [Frame({ name: 'A', w: 10, h: 10 }), Frame({ name: 'B', w: 10, h: 10 })]
+    })
+    expect(result.name).toBe('A')
+    expect(getNodeOrThrow(g, pageId).childIds.length).toBe(before + 2)
+  })
+
+  it('renders a nested fragment into its parent', async () => {
+    const g = makeSceneGraph()
+    const [result] = await renderJSX(
+      g,
+      '<Frame name="Card"><><Text>One</Text><Text>Two</Text></></Frame>'
+    )
+    const card = getNodeOrThrow(g, result.id)
+    expect(card.childIds.map((id) => getNodeOrThrow(g, id).text)).toEqual(['One', 'Two'])
+  })
+})
+
 describe('renderJSX (string → scene graph)', () => {
   it('renders JSX string', async () => {
     const g = makeSceneGraph()

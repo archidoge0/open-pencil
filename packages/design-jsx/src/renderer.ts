@@ -16,7 +16,7 @@ import {
 import { applySizeOverrides, propsToOverrides } from './props-overrides'
 import { prepareScalarBindings } from './scalar-bindings'
 import type { DesignJSXServices } from './services'
-import { isTreeNode } from './tree'
+import { FRAGMENT, isTreeNode } from './tree'
 import type { TreeNode } from './tree'
 import type { RenderOptions } from './types'
 import { isVariable, resolveVariableId, type DesignVariable } from './vars'
@@ -69,27 +69,49 @@ function randomHex(bytes: number): string {
   ).join('')
 }
 
+/** The nodes a tree renders as: a fragment's children, or the tree itself. */
+function treeRoots(tree: TreeNode): TreeNode[] {
+  return tree.type === FRAGMENT ? tree.children.filter(isTreeNode) : [tree]
+}
+
+/** Render every root of `tree` into the parent and lay out once. */
+export async function renderRoots<Artwork>(
+  services: DesignJSXServices<Artwork>,
+  graph: SceneGraph,
+  tree: TreeNode,
+  options: RenderOptions = {}
+): Promise<RenderResult[]> {
+  const roots = treeRoots(tree)
+  if (roots.length === 0) throw new Error('JSX must return a Figma element (Frame, Text, etc)')
+  const parentId = options.parentId ?? graph.getPages()[0].id
+
+  const nodes: SceneNode[] = []
+  for (const root of roots) {
+    const node = await renderNode(services, graph, root, parentId)
+    if (options.x !== undefined) graph.updateNode(node.id, { x: options.x })
+    if (options.y !== undefined) graph.updateNode(node.id, { y: options.y })
+    nodes.push(node)
+  }
+
+  services.layout(graph)
+
+  return nodes.map((node) => ({
+    id: node.id,
+    name: node.name,
+    type: node.type,
+    childIds: node.childIds
+  }))
+}
+
+/** Render `tree` and return its first root; a fragment's other roots are rendered too. */
 export async function renderTree<Artwork>(
   services: DesignJSXServices<Artwork>,
   graph: SceneGraph,
   tree: TreeNode,
   options: RenderOptions = {}
 ): Promise<RenderResult> {
-  const parentId = options.parentId ?? graph.getPages()[0].id
-
-  const result = await renderNode(services, graph, tree, parentId)
-
-  if (options.x !== undefined) graph.updateNode(result.id, { x: options.x })
-  if (options.y !== undefined) graph.updateNode(result.id, { y: options.y })
-
-  services.layout(graph)
-
-  return {
-    id: result.id,
-    name: result.name,
-    type: result.type,
-    childIds: result.childIds
-  }
+  const [first] = await renderRoots(services, graph, tree, options)
+  return first
 }
 
 interface PreparedProps {

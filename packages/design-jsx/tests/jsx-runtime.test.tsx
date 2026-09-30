@@ -26,4 +26,16 @@ describe('JSX runtime', () => {
     )
     expect(tree.children).toEqual(labels.map((label) => Text({ children: label })))
   })
+
+  test('inlines nested fragments into their parent', () => {
+    const tree = (
+      <Frame>
+        <>
+          <Text>One</Text>
+          <Text>Two</Text>
+        </>
+      </Frame>
+    )
+    expect(tree.children).toEqual([Text({ children: 'One' }), Text({ children: 'Two' })])
+  })
 })
