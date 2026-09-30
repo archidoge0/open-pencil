@@ -116,7 +116,8 @@ function toSceneEffect(effect: FigmaEffect): Effect {
       radius: effect.radius,
       spread: effect.spread ?? 0,
       visible: effect.visible,
-      blendMode: effect.blendMode,
+      // Figma accepts PASS_THROUGH on shadows but stores NORMAL; it is a layer blend mode.
+      blendMode: effect.blendMode === 'PASS_THROUGH' ? 'NORMAL' : effect.blendMode,
       ...(effect.type === 'DROP_SHADOW' && effect.showShadowBehindNode !== undefined
         ? { showShadowBehindNode: effect.showShadowBehindNode }
         : {})

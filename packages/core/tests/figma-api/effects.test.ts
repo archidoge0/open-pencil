@@ -49,6 +49,13 @@ describe('node.effects', () => {
     expect(effect).toMatchObject({ spread: 2, showShadowBehindNode: false })
   })
 
+  test('stores PASS_THROUGH on shadows as NORMAL', () => {
+    for (const type of ['DROP_SHADOW', 'INNER_SHADOW'] as const) {
+      const [effect] = assign([{ ...shadow, type, blendMode: 'PASS_THROUGH' }]).effects
+      expect(effect).toMatchObject({ type, blendMode: 'NORMAL' })
+    }
+  })
+
   test('reads blurs back with blurType and without shadow fields', () => {
     expect(assign([{ type: 'LAYER_BLUR', radius: 4, visible: true }]).effects).toEqual([
       { type: 'LAYER_BLUR', visible: true, radius: 4, boundVariables: {}, blurType: 'NORMAL' }
