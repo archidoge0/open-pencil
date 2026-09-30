@@ -11,6 +11,7 @@
 
 ### Added
 
+- Write design trees as TSX with `@open-pencil/design-jsx` as the JSX import source, and render them with `renderTree`.
 - Swap the component behind an instance with `instance.swapComponent(component)` in the plugin API, as in Figma.
 - Detach an instance from its component with `detachInstance()` in the plugin API, as in Figma, from scripts run through `eval`.
 - Run scripts written for Figma's dynamic-page mode that call `figma.getNodeByIdAsync()` or `getMainComponentAsync()`; both resolve to the same nodes as their synchronous forms.

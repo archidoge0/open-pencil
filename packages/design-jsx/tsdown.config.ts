@@ -3,7 +3,9 @@ import raw from 'unplugin-raw/rolldown'
 
 export default defineConfig({
   entry: {
-    index: './src/index.ts'
+    index: './src/index.ts',
+    'jsx-runtime': './src/jsx-runtime.ts',
+    'jsx-dev-runtime': './src/jsx-dev-runtime.ts'
   },
   // `reference.ts` imports the authoring guide as text.
   plugins: [raw()],

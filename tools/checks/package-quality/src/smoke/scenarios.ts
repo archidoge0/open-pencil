@@ -37,6 +37,10 @@ export const runtimeScenarios: RuntimeScenario[] = [
     code: "const { Frame, Text, JSX_REFERENCE } = await import('@open-pencil/design-jsx'); const tree = Frame({ w: 100, children: [Text({ children: 'OpenPencil' })] }); if (tree.type !== 'frame' || tree.children.length !== 1 || !JSX_REFERENCE.includes('Frame')) throw new Error('Design JSX package smoke failed')"
   },
   {
+    name: 'Design JSX runtime',
+    code: "const { jsx } = await import('@open-pencil/design-jsx/jsx-runtime'); const { Frame, Text } = await import('@open-pencil/design-jsx'); const tree = jsx(Frame, { w: 100, children: jsx(Text, { children: 'OpenPencil' }) }); if (tree.type !== 'frame' || tree.children[0]?.type !== 'text') throw new Error('Design JSX runtime failed')"
+  },
+  {
     name: 'DOM/CSS conversion',
     code: "const { htmlToSceneGraph } = await import('@open-pencil/dom-css'); const graph = await htmlToSceneGraph('<div class=card>OpenPencil</div>', { cssText: '.card { width: 320px; }' }); if (graph.getPages()[0].width !== 320) throw new Error('DOM/CSS scene graph failed')"
   },

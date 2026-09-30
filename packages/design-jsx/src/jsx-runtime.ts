@@ -10,8 +10,9 @@ export function jsx(type: string | ((props: BaseProps) => TreeNode), props: Base
 export const jsxs = jsx
 export const jsxDEV = jsx
 
+/** Groups siblings the way `<>…</>` does in `renderJSX` strings: a node with an empty type. */
 export function Fragment({ children }: { children?: unknown }): TreeNode {
-  return node('fragment', { children })
+  return node('', { children })
 }
 
 export namespace JSX {
