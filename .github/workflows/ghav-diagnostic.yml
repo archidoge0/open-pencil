@@ -1,0 +1,65 @@
+name: GHAV Open Pencil 558 Core byte diagnostic
+
+on:
+  push:
+    branches:
+      - codex/ghav-openpencil558-diagnostic
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout fixed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 9b3deffab7bfb4cfc6c81c49485ff067f1dca206
+          persist-credentials: false
+      - name: Setup Bun workspace
+        uses: ./.github/actions/setup-bun
+        with:
+          lfs: 'true'
+      - name: Build Core first
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun --filter @open-pencil/core build
+          cp -a packages/core/dist /tmp/ghav-core-only
+          echo "GHAV_CORE_ONLY_SHA=$(find packages/core/dist -type f -print0 | sort -z | xargs -0 shasum -a 256 | shasum -a 256)"
+      - name: Build all nine packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun run build:packages
+          echo "GHAV_FULL_BUILD_CORE_SHA=$(find packages/core/dist -type f -print0 | sort -z | xargs -0 shasum -a 256 | shasum -a 256)"
+      - name: Compare Core files within one runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+
+          def files(root):
+              return {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+                      for path in root.rglob('*') if path.is_file()}
+
+          core_only = files(Path('/tmp/ghav-core-only'))
+          full_build = files(Path('packages/core/dist'))
+          missing = sorted(set(core_only) - set(full_build))
+          added = sorted(set(full_build) - set(core_only))
+          changed = sorted(path for path in core_only.keys() & full_build.keys()
+                           if core_only[path] != full_build[path])
+          print('GHAV_CORE_BYTE_COMPARISON=' + json.dumps({
+              'core_only_files': len(core_only), 'full_build_files': len(full_build),
+              'missing_after_full': missing, 'added_after_full': added,
+              'changed_count': len(changed),
+              'changed_examples': [{
+                  'path': path, 'core_only_sha256': core_only[path],
+                  'full_build_sha256': full_build[path]}
+                  for path in changed[:30]],
+          }, sort_keys=True))
+          PY
