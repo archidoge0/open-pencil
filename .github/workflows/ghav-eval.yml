@@ -1,0 +1,48 @@
+name: GHAV Open Pencil 558 editor shard
+
+on:
+  push:
+    branches:
+      - codex/ghav-openpencil558-before
+      - codex/ghav-openpencil558-human
+      - codex/ghav-openpencil558-ours
+
+permissions:
+  contents: read
+
+jobs:
+  editor:
+    name: Editor unit-test shard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout fixed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 9b3deffab7bfb4cfc6c81c49485ff067f1dca206
+          persist-credentials: false
+      - name: Setup Bun workspace
+        uses: ./.github/actions/setup-bun
+        with:
+          lfs: 'true'
+      - name: Build shared Core test dependency
+        run: bun --filter @open-pencil/core build
+      - name: Run complete editor unit-test shard
+        shell: bash
+        env:
+          BUN_HEAVY_TESTS: 'false'
+        run: |
+          set -euo pipefail
+          mapfile -t test_files < <(bun tools/unit-tests/src/list.ts editor)
+          test "${#test_files[@]}" -eq 47
+          printf '%s\n' "${test_files[@]}" | shasum -a 256
+          bun test "${test_files[@]}"
+      - name: Fingerprint Core build output
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d packages/core/dist
+          count=$(find packages/core/dist -type f | wc -l)
+          test "$count" -gt 0
+          echo "GHAV_CORE_DIST_FILE_COUNT=$count"
+          find packages/core/dist -type f -print0 | sort -z | xargs -0 shasum -a 256 | shasum -a 256
