@@ -1,0 +1,40 @@
+name: "ghav human: CI"
+"on":
+  push:
+    branches:
+      - ghav/dev/715
+    paths:
+      - .ghav/human
+permissions:
+  contents: read
+  packages: read
+jobs:
+  unit-tests:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        group:
+          - app
+          - cli
+          - core
+          - dom
+          - fig
+          - mcp
+          - render
+          - scene-graph
+          - vue
+    name: Unit tests — ${{ matrix.group }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-bun
+        with:
+          lfs: "true"
+          lfs-include: tests/fixtures/gold-preview.fig,tests/fixtures/circle-text.fig,tests/fixtures/fonts/*
+      - name: Build shared Core test dependency
+        run: bun --filter @open-pencil/core build
+      - name: Run ${{ matrix.group }} unit tests
+        run: bun tools/unit-tests/src/run.ts "${{ matrix.group }}"
